@@ -951,6 +951,9 @@ pub struct Areas {
     /// So if you close three windows and then reopen them all in one frame,
     /// they will all be sent to the top, but keep their previous internal order.
     wants_to_be_on_top: ahash::HashSet<LayerId>,
+
+    /// Set layer z index
+    z_index: ahash::HashMap<LayerId, i32>,
 }
 
 impl Areas {
@@ -1042,6 +1045,15 @@ impl Areas {
         }
     }
 
+    pub fn set_z_index(&mut self, layer_id: LayerId, z_index: i32) {
+        self.visible_current_frame.insert(layer_id);
+        self.z_index.insert(layer_id, z_index);
+
+        if !self.order.iter().any(|x| *x == layer_id) {
+            self.order.push(layer_id);
+        }
+    }
+
     pub fn top_layer_id(&self, order: Order) -> Option<LayerId> {
         self.order
             .iter()
@@ -1056,6 +1068,7 @@ impl Areas {
             visible_current_frame,
             order,
             wants_to_be_on_top,
+            z_index,
             ..
         } = self;
 
@@ -1063,6 +1076,18 @@ impl Areas {
         visible_current_frame.clear();
         order.sort_by_key(|layer| (layer.order, wants_to_be_on_top.contains(layer)));
         wants_to_be_on_top.clear();
+        if !z_index.is_empty() {
+            let (positions, mut layers_to_sort): (Vec<_>, Vec<_>) = order
+                .iter()
+                .copied()
+                .enumerate()
+                .filter(|(_, id)| z_index.contains_key(id))
+                .unzip();
+            layers_to_sort.sort_by_key(|id| z_index.get(id));
+            for (i, layer) in positions.into_iter().zip(layers_to_sort) {
+                order[i] = layer;
+            }
+        }
     }
 }
 
