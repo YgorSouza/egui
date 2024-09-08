@@ -34,6 +34,8 @@ pub use rgba::*;
 mod hex_color_runtime;
 pub use hex_color_runtime::*;
 
+mod lookup;
+
 // ----------------------------------------------------------------------------
 // Color conversion:
 
@@ -60,12 +62,9 @@ impl From<Rgba> for Color32 {
 }
 
 /// gamma [0, 255] -> linear [0, 1].
+#[inline(always)]
 pub fn linear_f32_from_gamma_u8(s: u8) -> f32 {
-    if s <= 10 {
-        s as f32 / 3294.6
-    } else {
-        ((s as f32 + 14.025) / 269.025).powf(2.4)
-    }
+    lookup::LINEAR_F32_FROM_GAMMA_U8[usize::from(s)]
 }
 
 /// linear [0, 255] -> linear [0, 1].
@@ -77,16 +76,13 @@ pub fn linear_f32_from_linear_u8(a: u8) -> f32 {
 
 /// linear [0, 1] -> gamma [0, 255] (clamped).
 /// Values outside this range will be clamped to the range.
+#[inline(always)]
 pub fn gamma_u8_from_linear_f32(l: f32) -> u8 {
-    if l <= 0.0 {
-        0
-    } else if l <= 0.0031308 {
-        fast_round(3294.6 * l)
-    } else if l <= 1.0 {
-        fast_round(269.025 * l.powf(1.0 / 2.4) - 14.025)
-    } else {
-        255
-    }
+    let threshold = (l - 1e-4).clamp(0.0, 1.0);
+    let lower_bound = (threshold * 255.0) as u8;
+    (lower_bound..u8::MAX)
+        .find(|&s| linear_f32_from_gamma_u8(s) >= threshold)
+        .unwrap_or(u8::MAX)
 }
 
 /// linear [0, 1] -> linear [0, 255] (clamped).
